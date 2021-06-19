@@ -35,3 +35,10 @@ class Deck:
         Returns: Series with value-counts of card types.
         """
         return self.main_data.Type.value_counts()
+
+    def unit_stats(self):
+        """Returns statics on units.
+
+        Returns: Series with mean unit stats
+        """
+        return self.main_data[ self.main_data.Type == 'Unit' ][['Attack','Health']].mean()
