@@ -22,6 +22,13 @@ if __name__ == '__main__':
     units_by_player = df_7win_decks.groupby('Contributor')['n_units'].describe().unstack(1)
     units_by_player[units_by_player['count'] >= 3].sort_values('mean')[['count', 'mean', 'min', 'max']]
 
+    # Look at the unit-counts by player
+    df_7win_decks['n_units'] = df_7win_decks.Deck.apply(lambda x: x.types())['Unit']
+    df_7win_decks['MainFaction'] = df_7win_decks.Deck.apply(lambda x: ''.join(x.faction()[0]) )
+    units_by_faction = df_7win_decks.groupby('MainFaction')['n_units'].describe().unstack(1)
+    print "**** Average unit count by deck main-faction (minimum 3 decks)"
+    print units_by_faction[units_by_faction['count'] >= 3].sort_values('mean')[['count', 'mean', 'min', 'max']]
+
     # Power by deck
     df_7win_decks['n_power'] = df_7win_decks.Deck.apply(lambda x: x.types())['Power']
     power_by_player = df_7win_decks.groupby('Contributor')['n_power'].describe().unstack(1)
@@ -44,6 +51,7 @@ if __name__ == '__main__':
     sorted_units_faction_by_health.plot(kind='bar', stacked=True, grid=True, color=colors, legend=True)
 
     # Analyze the top splashed cards
+    # TODO: THIS HAS TO BE MORE ELEGANT!!!
     splashed_cards = []
     n_splash_decks = 0
     for deck in df_7win_decks['Deck']:
