@@ -66,6 +66,13 @@ class Deck:
         main_factions, splash_factions = self.faction()
         return ''.join(main_factions) + ''.join(splash_factions).lower()
 
+    def cards_splash(self):
+        """Return list of most splashed cards."""
+        main_factions, splash_factions = self.faction()
+        splashed_set = set(splash_factions)
+        is_splash = lambda x: bool(splashed_set.intersection(x))
+        return [x for x in self.main_cards if is_splash(x.data['Influence'])]
+
     def types(self):
         """Return unit-type breakdown of the maindeck
         Returns: Series with value-counts of card types.
