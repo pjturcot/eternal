@@ -1,7 +1,8 @@
+import urlparse
 
 import card
 import deck
-import urlparse
+
 
 def parse_deckbuilder_url(url):
     """Parse a deck-builder URL.
@@ -24,13 +25,12 @@ def parse_deckbuilder_url(url):
         market_cards = []
         for id_count in market_card_id_counts:
             cid, count = id_count.split(':')
-            market_cards += [card.ALL[ cid] ] * int(count)
+            market_cards += [card.ALL[cid]] * int(count)
 
     main_card_id_counts = main_deck.split(';')[:-1]
     main_cards = []
     for id_count in main_card_id_counts:
         cid, count = id_count.split(':')
-        main_cards += [card.ALL[ cid] ] * int(count)
+        main_cards += [card.ALL[cid]] * int(count)
 
-
-    return deck.Deck( main_cards, market=market_cards )
+    return deck.Deck(main_cards, market=market_cards)

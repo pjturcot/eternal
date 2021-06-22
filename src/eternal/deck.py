@@ -1,5 +1,7 @@
 import pandas as pd
 
+from card import FACTIONS
+
 
 class Deck:
     """Object representing a deck of cards in Eternal.
@@ -28,9 +30,7 @@ class Deck:
 
         Returns: Dictionary with keys 'F','J','T','P','S' with values of the card-count
         """
-
         non_power_influence = self.main_data[self.main_data.Type != 'Power'].Influence
-        FACTIONS = set('FJTPS')
         faction_counts = pd.Series(index=list(FACTIONS), data=0)
         for faction in FACTIONS:
             faction_counts[faction] = non_power_influence.str.contains(faction).sum()

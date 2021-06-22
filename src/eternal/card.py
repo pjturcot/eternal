@@ -3,11 +3,30 @@ import os
 
 import pandas as pd
 
+FACTIONS = set('FJTPS')
+
+
+def influence_to_faction(influence):
+    """Convert influence to faction
+
+    Args:
+        influence: string with influence e.g. {F}{F}{J}
+
+    Returns: faction
+    faction is a string with JUST the de-deuplicated influence or 'None' (string) for factionless
+    """
+    faction = FACTIONS.intersection(influence)
+    if faction:
+        return ''.join(faction)
+    else:
+        return 'None'
+
 
 class CardInfo:
     """Class to represent stats of a card in Eternal"""
 
     # TODO: Replace with Python 3.7's dataclass
+    # TODO: Figure out how to handle-factions more easily
     BASE_FIELDS = set(['Attack', 'CardText', 'Cost', 'DeckBuildable', 'DetailsUrl', 'EternalID', 'Health',
                        'ImageUrl', 'Influence', 'Name', 'Rarity', 'SetNumber', 'Type'])
     UNIT_FIELDS = set(['UnitType'])
@@ -36,8 +55,6 @@ class CardInfo:
 
         Returns: instance of Card
         """
-
-        # TODO: Better handle the case of initialization from a series
         if isinstance(card_info, CardInfo):
             self.data = card_info.data
             self.id = card_info.id
@@ -88,7 +105,7 @@ class CardCollection:
         for card_json in json_card_list:
             if CardInfo.is_valid_dict(card_json):
                 cardinfo = CardInfo(card_json)
-                self.cards_dict[ cardinfo.id ] = cardinfo
+                self.cards_dict[cardinfo.id] = cardinfo
         self.cards = self.cards_dict.values()
         self.data = pd.DataFrame(x.data for x in self.cards)
 
