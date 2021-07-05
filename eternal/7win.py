@@ -79,12 +79,12 @@ if __name__ == '__main__':
 
     # Top stealth units
     N = 20
-    print("******Top {N} Stealth units (by count)*****".format(N=N))
+    print("******Top {N} Stealth Units (by count)*****".format(N=N))
     print(all_cards[(all_cards['Type'] == 'Unit') & (all_cards['CardText'].str.contains('<b>Stealth</b>'))]['Name'].value_counts().head(N))
     print("\n")
 
     top_stealth_cards = card_counts[(card_counts['Type'] == 'Unit') & (card_counts['CardText'].str.contains('<b>Stealth</b>'))].sort_values('CountPerDeck', ascending=False)
-    print("******Top {N} Fast spells  (by count per deck)*****".format(N=N))
+    print("******Top {N} Steal Units  (by count per deck)*****".format(N=N))
     print(top_stealth_cards[['Name', 'Faction', 'Count', 'PossibleDecks', 'CountPerDeck']].head(N))
     print("\n")
 
