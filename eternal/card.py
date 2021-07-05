@@ -15,7 +15,7 @@ def influence_to_faction(influence):
     Returns: faction
     faction is a string with JUST the de-deuplicated influence or 'None' (string) for factionless
     """
-    faction = FACTIONS.intersection(influence)
+    faction = sorted(FACTIONS.intersection(influence))
     if faction:
         return ''.join(faction)
     else:
@@ -74,12 +74,12 @@ class CardInfo:
 
     @classmethod
     def validate_dict(cls, d):
-        fields = list(d.keys())  # Handles the case of dictionary or pandas Series
+        fields = set(d.keys())  # Handles the case of dictionary or pandas Series
         assert cls.BASE_FIELDS.issubset(fields)
-        extra_fields = cls.BASE_FIELDS.difference(fields)
+        extra_fields = fields.difference(cls.BASE_FIELDS)
         if extra_fields:
-            if fields['Type'] == 'Unit':
-                assert not cls.UNIT_FIELDS.difference(extra_fields)
+            if d['Type'] == 'Unit':
+                assert not extra_fields.difference(cls.UNIT_FIELDS)
 
 
 class CardCollection:
