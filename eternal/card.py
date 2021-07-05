@@ -74,7 +74,7 @@ class CardInfo:
 
     @classmethod
     def validate_dict(cls, d):
-        fields = d.keys()  # Handles the case of dictionary or pandas Series
+        fields = list(d.keys())  # Handles the case of dictionary or pandas Series
         assert cls.BASE_FIELDS.issubset(fields)
         extra_fields = cls.BASE_FIELDS.difference(fields)
         if extra_fields:
@@ -106,7 +106,7 @@ class CardCollection:
             if CardInfo.is_valid_dict(card_json):
                 cardinfo = CardInfo(card_json)
                 self.cards_dict[cardinfo.id] = cardinfo
-        self.cards = self.cards_dict.values()
+        self.cards = list(self.cards_dict.values())
         self.data = pd.DataFrame(x.data for x in self.cards)
 
     def __getitem__(self, key):

@@ -19,5 +19,5 @@ def get_faction_colors(faction_list):
         if x in FACTION_COLORS_LOOKUP:
             colors.append(FACTION_COLORS_LOOKUP[x])
         else:
-            colors.append(cycler.next())
+            colors.append(next(cycler))
     return colors

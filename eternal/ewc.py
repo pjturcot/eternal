@@ -1,4 +1,4 @@
-import urlparse
+import urllib.parse
 
 import card
 import deck
@@ -16,7 +16,7 @@ def parse_deckbuilder_url(url):
     market = None
     main_deck = None
 
-    parsed_url = urlparse.urlparse(url)
+    parsed_url = urllib.parse.urlparse(url)
     main_deck = parsed_url.query.split('main=')[1]
     market_cards = None
     if 'market' in main_deck:
