@@ -99,8 +99,8 @@ class CardInfo:
         re_draw_sigil = re.compile("(?i)draw a .*sigil")
         matches = re_draw_sigil.findall(card_text)
         if matches and self.data['Cost'] <= 2:
-            LOWCOST_DRAW_SIGIL_EXCEPTIONS = {"1-157": 0,  # Privilege of Rank --> 2J cost draw a justice sigil
-                                             "1-513": 0,  # Find the Way      --> 2T cost spell to draw a depleted sigil
+            LOWCOST_DRAW_SIGIL_EXCEPTIONS = {"1-157": 1,  # Privilege of Rank --> 2J cost draw a justice sigil
+                                             "1-513": 1,  # Find the Way      --> 2T cost spell to draw a depleted sigil
                                              "3-108": 0,  # Copperhall Porter --> 2J cost unit... maybe
                                              "4-275": 0,  # Recon Tower
                                              "11-67": 0,  # Reliable Troops

@@ -15,6 +15,7 @@ if __name__ == '__main__':
         deck = ewc.parse_deckbuilder_url(row['EWC-P'])
         deck.main_data.name = id
         deck.main_data['DeckId'] = id
+        deck.main_data['PowerCount'] = [ card.power_count() for card in deck.main_cards ]
         df_7win_decks.at[id, 'Deck'] = deck
     df_7win_decks['MainFaction'] = df_7win_decks.Deck.apply(lambda x: ''.join(x.faction()[0]))
     df_7win_decks['SplashFaction'] = df_7win_decks.Deck.apply(lambda x: ''.join(x.faction()[1]))
@@ -101,10 +102,30 @@ if __name__ == '__main__':
     print("**** Average unit count by deck main-faction (minimum 3 decks)")
     print(units_by_faction[units_by_faction['count'] >= 3].sort_values('mean')[['count', 'mean', 'min', 'max']])
 
-    # Power by deck
+    # Power by deck - type
     df_7win_decks['n_power'] = df_7win_decks.Deck.apply(lambda x: x.types())['Power']
-    power_by_player = df_7win_decks.groupby('Contributor')['n_power'].describe()
-    power_by_player[power_by_player['count'] >= 3].sort_values('mean')[['count', 'mean', 'min', 'max']]
+    power_by_player = df_7win_decks.groupby('Contributor')['n_power'].describe()[['count', 'mean', 'min', 'max']]
+    # print("**** Power played by player (card type = Power) *****")
+    # print(power_by_player[power_by_player['count'] >= 3].sort_values('mean')[['count', 'mean', 'min', 'max']])
+
+    # Power by deck - power type
+    df_7win_decks['n_power_count'] = df_7win_decks.index.map( all_cards.groupby('DeckId')['PowerCount'].sum() )
+    powercount_by_player = df_7win_decks.groupby('Contributor')['n_power_count'].describe()[['count', 'mean', 'min', 'max']]
+    print("**** Power played by player (effective power*) *****")
+    print("NOTE: <=2 cost or less spells counted as power e.g. Seek Power/Etchings/BluePrints etc.")
+    print(powercount_by_player[powercount_by_player['count'] >= 3].sort_values('mean'))
+
+    # Power comparison
+    power_by_player_merged = pd.merge( power_by_player, powercount_by_player, left_index=True, right_index=True,
+                                       suffixes=('_type','_effective'))
+    # print( power_by_player_merged[power_by_player_merged['count_type'] >= 3].sort_values('mean_effective'))
+
+
+    # Power by deck - power type
+    powercount_by_deck_main_faction = df_7win_decks.groupby('MainFaction')['n_power_count'].describe()[['count', 'mean', 'min', 'max']]
+    print("**** Power played by deck main factions (effective power*) *****")
+    print("NOTE: <=2 cost or less spells counted as power e.g. Seek Power/Etchings/BluePrints etc.")
+    print(powercount_by_deck_main_faction[powercount_by_deck_main_faction['count'] >= 3].sort_values('mean'))
 
     # Mean card cost by deck faction
     all_cards[all_cards.Type != 'Power'].groupby('DeckMainFaction')['Cost'].mean()
