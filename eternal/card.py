@@ -87,8 +87,34 @@ class CardInfo:
             obj_class=self.__class__.__name__, address=hex(id(self)),
             id=self.id, name=self.data['Name'], type=self.data['Type'], rarity=self.data['Rarity'])
 
-    def epc_power_count(self):
+    def power_count(self):
         """Generate the number of power sources a card represents for purposes of power counting within a deck.
+
+        Returns: Amount of power created by the card as a number.
+        """
+        if self.data['Type'] == 'Power':
+            return 1
+
+        card_text = self.data['CardText']
+        re_draw_sigil = re.compile("(?i)draw a .*sigil")
+        matches = re_draw_sigil.findall(card_text)
+        if matches and self.data['Cost'] <= 2:
+            LOWCOST_DRAW_SIGIL_EXCEPTIONS = {"1-157": 0,  # Privilege of Rank --> 2J cost draw a justice sigil
+                                             "1-513": 0,  # Find the Way      --> 2T cost spell to draw a depleted sigil
+                                             "3-108": 0,  # Copperhall Porter --> 2J cost unit... maybe
+                                             "4-275": 0,  # Recon Tower
+                                             "11-67": 0,  # Reliable Troops
+                                             "1105-19": 0,  # Hifos, Reach Captain
+                                             }
+            if self.id in LOWCOST_DRAW_SIGIL_EXCEPTIONS:
+                return LOWCOST_DRAW_SIGIL_EXCEPTIONS[self.id]
+            else:
+                return 1
+        return 0
+
+    def epc_power_count(self):
+        """Generate the number of power sources a card represents for purposes of showing total power sources in a deck.
+        This method aims to match the logic with https://www.shiftstoned.com/epc/
 
         Returns: Amount of power created by the card as a number.
         """
@@ -143,7 +169,7 @@ class CardInfo:
         # TODO: Complete the Play a Sigil condition
         re_play_sigil = re.compile("(?i)play a .*sigil")
         PLAY_SIGIL_EXCEPTIONS = {"1-346": 2}  # Minotaur Ambassador
-        
+
         return 0
 
 
