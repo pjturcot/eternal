@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 import pandas as pd
 
@@ -80,6 +81,70 @@ class CardInfo:
         if extra_fields:
             if d['Type'] == 'Unit':
                 assert not extra_fields.difference(cls.UNIT_FIELDS)
+
+    def __repr__(self):
+        return "<{obj_class}@{address}> {id:>8}: {name:<30} [{type}-{rarity}]".format(
+            obj_class=self.__class__.__name__, address=hex(id(self)),
+            id=self.id, name=self.data['Name'], type=self.data['Type'], rarity=self.data['Rarity'])
+
+    def epc_power_count(self):
+        """Generate the number of power sources a card represents for purposes of power counting within a deck.
+
+        Returns: Amount of power created by the card as a number.
+        """
+        # Short-circuit power cards
+        if self.data['Type'] == 'Power':
+            return 1
+
+        # Handle some other cases special cases before applying rules
+        # * "Draw a power card": (11-43: Conspire) (4-274: Petition), notably excluding (8-25: Midias, Leyline Dragon)
+        if self.id in ["11-43", "4-274"]:
+            return 1
+
+        # Handle +X Maximum Power cards
+        card_text = self.data['CardText']
+        re_max_power = re.compile("\+. Maximum Power")
+        matches = re_max_power.findall(card_text)
+        if matches:
+            if len(matches) == 1:
+                return int(matches[0][1])
+            else:
+                # As of Set 11, there are only 4 cards in this case:
+                #   Azindel, the Wayfinder
+                #   Mask of Torment
+                #   High Prophet of Sol
+                #   Battery Mage
+                # All of these are treated as 1 power source according to https://www.shiftstoned.com/epc/ so we will follow suit
+                return int(matches[0][1])
+
+        # Handle "Draw a [XXX] Sigil"
+
+        # Handle some other cases special cases before applying rules
+        # The below are done to match https://www.shiftstoned.com/epc/
+        # The logic appears to be that no-other conditions need be met in order to get the Sigil*
+        # * - Reliable Troops is an exception
+        DRAW_SIGIL_EXCEPTIONS = {"1-154": 0,  # Spire Chaplain
+                                 "3-305": 0,  # Lieutenant Relia
+                                 "6-29": 0,  # Kaleb's Persuader
+                                 "7-76": 0,  # Hexcaster
+                                 "11-49": 0,  # Nurturing Sentinel
+                                 "1087-1": 0,  # Jekk, Mercenary Hunter
+                                 "11-67": 1,  # Reliable Troops <-- This seems to be an exception as the Pay 2 cost is ignored by EPC
+                                 "2-177": 2  # Brilliant Discovery
+                                 }
+        if self.id in DRAW_SIGIL_EXCEPTIONS:
+            return DRAW_SIGIL_EXCEPTIONS[self.id]
+        re_draw_sigil = re.compile("(?i)draw a .*sigil")
+        matches = re_draw_sigil.findall(card_text)
+        if matches:
+            return 1
+
+        # Play a [X] Sigil/Power
+        # TODO: Complete the Play a Sigil condition
+        re_play_sigil = re.compile("(?i)play a .*sigil")
+        PLAY_SIGIL_EXCEPTIONS = {"1-346": 2}  # Minotaur Ambassador
+        
+        return 0
 
 
 class CardCollection:
