@@ -1,8 +1,7 @@
-import matplotlib.pyplot as plt
-import pandas as pd
-
 import card
 import ewc
+import matplotlib.pyplot as plt
+import pandas as pd
 import plot
 
 if __name__ == '__main__':
@@ -37,6 +36,7 @@ if __name__ == '__main__':
         playable_deck_count_by_faction[faction] = deck_count
     playable_deck_count_by_faction['None'] = len(df_7win_decks)
 
+    # ********** TOP CARDS (LISTS) **************
     # Figure out card count statistics
     card_counts = all_cards.groupby('Name')['Faction'].apply(lambda x: pd.Series({'Faction': x[0], 'Count': x.size})).unstack(1)
     card_counts['PossibleDecks'] = card_counts['Faction'].map(playable_deck_count_by_faction)
@@ -77,7 +77,6 @@ if __name__ == '__main__':
     print(top_fastspell_cards[['Name', 'Faction', 'Count', 'PossibleDecks', 'CountPerDeck']].head(N))
     print("\n")
 
-
     # Top stealth units
     N = 20
     print("******Top {N} Stealth Units (by count)*****".format(N=N))
@@ -89,7 +88,7 @@ if __name__ == '__main__':
     print(top_stealth_cards[['Name', 'Faction', 'Count', 'PossibleDecks', 'CountPerDeck']].head(N))
     print("\n")
 
-
+    # ********** UNIT ANALYSIS **************
     # Look at the unit-counts by player
     df_7win_decks['UnitCount'] = df_7win_decks.Deck.apply(lambda x: x.types())['Unit']
     units_by_player = df_7win_decks.groupby('Contributor')['UnitCount'].describe()
@@ -102,30 +101,51 @@ if __name__ == '__main__':
     print("**** Average unit count by deck main-faction (minimum 3 decks)")
     print(units_by_faction[units_by_faction['count'] >= 3].sort_values('mean')[['count', 'mean', 'min', 'max']])
 
-    # Power by deck - type
-    df_7win_decks['n_power'] = df_7win_decks.Deck.apply(lambda x: x.types())['Power']
-    power_by_player = df_7win_decks.groupby('Contributor')['n_power'].describe()[['count', 'mean', 'min', 'max']]
+    # ********** DECK POWER ANALYSIS **************
+    # Contributor Deck Power (Type==Power)
+    df_7win_decks['NumPower'] = df_7win_decks.Deck.apply(lambda x: x.types())['Power']
+    power_by_player = df_7win_decks.groupby('Contributor')['NumPower'].describe()[['count', 'mean', 'min', 'max']]
     # print("**** Power played by player (card type = Power) *****")
     # print(power_by_player[power_by_player['count'] >= 3].sort_values('mean')[['count', 'mean', 'min', 'max']])
 
-    # Power by deck - power type
-    df_7win_decks['n_power_count'] = df_7win_decks.index.map( all_cards.groupby('DeckId')['PowerCount'].sum() )
-    powercount_by_player = df_7win_decks.groupby('Contributor')['n_power_count'].describe()[['count', 'mean', 'min', 'max']]
+    # Contributor Deck Power (Effective Power)
+    df_7win_decks['EffectivePower'] = df_7win_decks.index.map( all_cards.groupby('DeckId')['PowerCount'].sum() )
+    powercount_by_player = df_7win_decks.groupby('Contributor')['EffectivePower'].describe()[['count', 'mean', 'min', 'max']]
     print("**** Power played by player (effective power*) *****")
     print("NOTE: <=2 cost or less spells counted as power e.g. Seek Power/Etchings/BluePrints etc.")
     print(powercount_by_player[powercount_by_player['count'] >= 3].sort_values('mean'))
 
-    # Power comparison
+    # Contributor Deck Power (Type==Power vs. Effective Power)
     power_by_player_merged = pd.merge( power_by_player, powercount_by_player, left_index=True, right_index=True,
                                        suffixes=('_type','_effective'))
     # print( power_by_player_merged[power_by_player_merged['count_type'] >= 3].sort_values('mean_effective'))
 
-
-    # Power by deck - power type
-    powercount_by_deck_main_faction = df_7win_decks.groupby('MainFaction')['n_power_count'].describe()[['count', 'mean', 'min', 'max']]
+    # MainFaction Deck Power (Type==Power vs. Effective Power)
+    powercount_by_deck_main_faction = df_7win_decks.groupby('MainFaction')['EffectivePower'].describe()[['count', 'mean', 'min', 'max']]
     print("**** Power played by deck main factions (effective power*) *****")
     print("NOTE: <=2 cost or less spells counted as power e.g. Seek Power/Etchings/BluePrints etc.")
     print(powercount_by_deck_main_faction[powercount_by_deck_main_faction['count'] >= 3].sort_values('mean'))
+
+
+    # Plot amount of power
+    MIN_DECK = 10
+    deck_count_by_faction = df_7win_decks['MainFaction'].value_counts()
+    deck_power_by_faction = df_7win_decks.groupby('MainFaction')['EffectivePower'].value_counts().sort_index()
+    normalized_deck_power_by_faction = pd.DataFrame()
+    for faction, count in deck_count_by_faction.items():
+        if count >= MIN_DECK:
+            normalized_deck_power_by_faction[faction] = deck_power_by_faction.loc[faction] / (float(count)) * 100.0
+    first_color = plot.get_faction_colors([x[0] for x in normalized_deck_power_by_faction.columns])
+    second_color = plot.get_faction_colors([x[1] for x in normalized_deck_power_by_faction.columns])
+    ax = normalized_deck_power_by_faction.plot(grid='on', color=first_color, linewidth=6, alpha=0.5)
+    normalized_deck_power_by_faction.plot(grid='on', color=second_color, linewidth=1, ax=ax)
+    plt.ylabel('Percentage of decks')
+    plt.title('Effective power by deck main faction')
+    print("**** Effective power by deck main faction ****")
+    print("(for all main-faction pairs with at least {MIN_DECK} decks)".format(MIN_DECK=MIN_DECK))
+
+
+    # ********** CARD-COST ANALYSIS **************
 
     # Mean card cost by deck faction
     all_cards[all_cards.Type != 'Power'].groupby('DeckMainFaction')['Cost'].mean()
