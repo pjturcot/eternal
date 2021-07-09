@@ -87,6 +87,46 @@ class CardInfo:
             obj_class=self.__class__.__name__, address=hex(id(self)),
             id=self.id, name=self.data['Name'], type=self.data['Type'], rarity=self.data['Rarity'])
 
+    def has_market_access(self):
+        """Return whether a card grants market access.
+
+        This does not return True for cards that simply have market interaction (buffing, prevention)
+        or cards that interact (even drawing) from the enemy market.
+
+        The decision was to return which cards incentivize creating your own market.
+
+        Returns: True or False
+        """
+        MARKET_ACCESS_EXCEPTIONS = {"6-14": False,  # Incendiary Slagmite
+                                    "6-92": False,  # Embargo Officer
+                                    "6-165": False,  # Bam, Sneakeepeekee
+                                    "10-51": False,  # Customs Officer
+                                    "10-65": False,  # Learn the Truth
+                                    "10-71": False,  # Bastion Boltcrafter
+                                    "10-75": True,  # Fair Exchange
+                                    "10-78": False,  # Arms Race
+                                    "10-102": False,  # Unexpected Arrival
+                                    "10-159": False,  # Send to Market
+                                    "10-183": False,  # Hoarding Builder
+                                    "10-215": True,  # Blow the Dam
+                                    "10-337": False,  # Scrapmetal Fury
+                                    "10-338": False,  # Xumuc Whisper
+                                    "10-342": True,  # Shorthopper
+                                    "10-345": False,  # Toll of Warfare
+                                    "10-362": True,  # Siege Supplier
+                                    "10-368": False,  # Vicious Overgrowth
+                                    "10-382": False,  # Watchwing Support
+                                    "1005-18": False,  # Ponysnatcher
+                                    "1097-8": False,  # Near Perfect Imitation
+                                    "1097-12": False,  # Glaive of the Chosen
+                                    "1107-10": False  # Gentleman Jun D’Angolo
+                                    }
+        card_text = self.data['CardText']
+        if self.id in MARKET_ACCESS_EXCEPTIONS:
+            return MARKET_ACCESS_EXCEPTIONS[self.id]
+        else:
+            return 'market' in card_text.lower()
+
     def power_count(self):
         """Generate the number of power sources a card represents for purposes of power counting within a deck.
 
