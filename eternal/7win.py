@@ -1,3 +1,5 @@
+import re
+
 import matplotlib.pyplot as plt
 import pandas as pd
 
@@ -44,7 +46,7 @@ if __name__ == '__main__':
     card_counts['PossibleDecks'] = card_counts['Faction'].map(playable_deck_count_by_faction)
     card_counts['CountPerDeck'] = card_counts['Count'] / card_counts['PossibleDecks']
     card_counts = card_counts.merge(eternal.card.ALL.data, left_index=True, right_on='Name', how='left')
-    card_counts['MarketAccess'] = card_counts.index.map(dict(([(x.id, x.has_market_access()) for x in eternal.card.ALL.cards] )))
+    card_counts['MarketAccess'] = card_counts.index.map(dict(([(x.id, x.has_market_access()) for x in eternal.card.ALL.cards])))
 
     # Frequency normalized (pick, boosting, faction, rarity)
     draft_pack_boosting = eternal.ewc.scrape_draft_pack_boosted_rates()
@@ -74,9 +76,11 @@ if __name__ == '__main__':
     offer_rate = 2 * freq_rarity_per_pack * base_offer_rate  # 2 packs for each pool
 
     card_counts['OfferRate'] = offer_rate
-    card_counts['CountPerOffer'] = card_counts['Count'] / (card_counts['OfferRate'] * card_counts['PossibleDecks'])
+    card_counts['CountPerOffer'] = card_counts['Count'] / (card_counts['OfferRate'])
+    card_counts['CountPerOfferDeck'] = card_counts['Count'] / (card_counts['OfferRate'] * card_counts['PossibleDecks'])
 
     # Analyze the top commons
+    CARD_COUNT_DISPLAY_COLS = ['Name', 'Rarity', 'Faction', 'PossibleDecks', 'OfferRate', 'Count', 'CountPerDeck', 'CountPerOffer', 'CountPerOfferDeck']
     N = 20
     RARITY = ['Common', 'Uncommon', 'Rare', 'Legendary']
 
@@ -84,8 +88,8 @@ if __name__ == '__main__':
     top_common_cards = card_counts[card_counts['Rarity'].isin(RARITY)].sort_values('Count', ascending=False)
     print("******Top {N} {Rarity} cards (by count)*****".format(N=N, Rarity='+'.join(RARITY)))
     print("NOTE: OfferRates is the number of cards you would expect in a given 4-pack draft")
-    print("NOTE: CounterPerOffer also corrects for possible Decks so faction frequency is accounted for")
-    print(top_common_cards[['Name', 'Rarity', 'Faction', 'Count', 'PossibleDecks', 'CountPerOffer', 'CountPerDeck', 'OfferRate']].head(N))
+    print("NOTE: CountPerOfferDeck also corrects for possible Decks so faction frequency is accounted for")
+    print(top_common_cards[CARD_COUNT_DISPLAY_COLS].head(N))
     print("\n")
 
     # Analyze the top cards by playable deck faction
@@ -94,23 +98,23 @@ if __name__ == '__main__':
     print("NOTE: OfferRates is the number of cards you would expect in a given 4-pack draft")
     print("NOTE: CounterPerOffer also corrects for possible Decks so faction frequency is accounted for")
 
-    print(top_common_cards[['Name', 'Rarity', 'Faction', 'Count', 'PossibleDecks', 'CountPerOffer', 'CountPerDeck', 'OfferRate']].head(N))
+    print(top_common_cards[CARD_COUNT_DISPLAY_COLS].head(N))
     print("\n")
 
     # Analyze the top cards picked cards
     top_picked_cards = card_counts[card_counts['Rarity'].isin(RARITY)].sort_values('CountPerOffer', ascending=False)
     print("******Top {N} {Rarity} cards (by count per offer*)*****".format(N=N, Rarity='+'.join(RARITY)))
     print("NOTE: OfferRates is the number of cards you would expect in a given 4-pack draft")
-    print("NOTE: CounterPerOffer also corrects for possible Decks so faction frequency is accounted for")
-    print(top_picked_cards[['Name', 'Rarity', 'Faction', 'Count', 'PossibleDecks', 'CountPerOffer', 'CountPerDeck', 'OfferRate']].head(N))
+    print("NOTE: CountPerOfferDeck also corrects for possible Decks so faction frequency is accounted for")
+    print(top_picked_cards[CARD_COUNT_DISPLAY_COLS].head(N))
     print("\n")
 
     # Analyze the least picked rare cards
     least_picked_cards = card_counts[card_counts['Rarity'].isin(RARITY)].sort_values('CountPerOffer', ascending=True)
     print("******Bottom {N} {Rarity} cards (by count per offer*)*****".format(N=N, Rarity='+'.join(RARITY)))
     print("NOTE: OfferRates is the number of cards you would expect in a given 4-pack draft")
-    print("NOTE: CounterPerOffer also corrects for possible Decks so faction frequency is accounted for")
-    print(least_picked_cards[['Name', 'Rarity', 'Faction', 'Count', 'PossibleDecks', 'CountPerOffer', 'CountPerDeck', 'OfferRate']].head(N))
+    print("NOTE: CountPerOfferDeck also corrects for possible Decks so faction frequency is accounted for")
+    print(least_picked_cards[CARD_COUNT_DISPLAY_COLS].head(N))
     print("\n")
 
     # Analyze the top splashed cards
@@ -124,11 +128,12 @@ if __name__ == '__main__':
     print(top_splashed_cards.head(N))
     print("\n")
 
-
     # Analyz all the market cards in play
     market_cards = card_counts[card_counts['MarketAccess']].sort_values('Count', ascending=False)
     print("*******ALL MARKET ACCESS CARDS********")
-    print(market_cards[['Name', 'Rarity', 'Faction', 'Count', 'PossibleDecks', 'CountPerOffer', 'CountPerDeck', 'OfferRate']])
+    print("NOTE: OfferRates is the number of cards you would expect in a given 4-pack draft")
+    print("NOTE: CountPerOfferDeck also corrects for possible Decks so faction frequency is accounted for")
+    print(market_cards[CARD_COUNT_DISPLAY_COLS])
     print("\n")
 
     # Top combat tricks
@@ -139,7 +144,7 @@ if __name__ == '__main__':
 
     top_fastspell_cards = card_counts[card_counts['Type'] == 'Fast Spell'].sort_values('CountPerDeck', ascending=False)
     print("******Top {N} Fast spells  (by count per deck)*****".format(N=N))
-    print(top_fastspell_cards[['Name', 'Faction', 'Count', 'PossibleDecks', 'CountPerDeck']].head(N))
+    print(top_fastspell_cards[CARD_COUNT_DISPLAY_COLS].head(N))
     print("\n")
 
     # Top stealth units
@@ -150,8 +155,8 @@ if __name__ == '__main__':
 
     top_stealth_cards = card_counts[(card_counts['Type'] == 'Unit') & (card_counts['CardText'].str.contains('<b>Stealth</b>'))].sort_values('CountPerDeck',
                                                                                                                                             ascending=False)
-    print("******Top {N} Steal Units  (by count per deck)*****".format(N=N))
-    print(top_stealth_cards[['Name', 'Faction', 'Count', 'PossibleDecks', 'CountPerDeck']].head(N))
+    print("******Top {N} Stealh Units  (by count per deck)*****".format(N=N))
+    print(top_stealth_cards[CARD_COUNT_DISPLAY_COLS].head(N))
     print("\n")
 
     # List out all "out of faction" cards
@@ -214,8 +219,6 @@ if __name__ == '__main__':
     normalized_deck_power_by_faction.plot(grid='on', color=second_color, linewidth=1, ax=ax)
     plt.ylabel('Percentage of decks')
     plt.title('Effective power by deck main faction')
-    print("**** Effective power by deck main faction ****")
-    print("(for all main-faction pairs with at least {MIN_DECK} decks)".format(MIN_DECK=MIN_DECK))
 
     # ********** CARD-COST ANALYSIS **************
 
@@ -277,3 +280,19 @@ if __name__ == '__main__':
     plt.title('Rolling 50-deck average of Main Faction popularity')
     plt.grid('on')
     plt.ylabel('Percentage of decks')
+
+
+    def display_cards_in_contention(*args,
+                                    stats=['Name', 'PossibleDecks', 'OfferRate', 'Count', 'CountPerDeck', 'CountPerOffer', 'CountPerOfferDeck']):
+        """
+
+        Args:
+            *args: One (or more) strings to use to search the names of cards to display (case insenstive)
+            stats: (optional) List of columns to display
+        """
+        re_string = '|'.join(args)
+        print(card_counts[card_counts['Name'].str.contains(re_string, flags=re.IGNORECASE)][stats])
+
+
+    display_cards_in_contention('open', 'protector')
+    display_cards_in_contention('commando', 'valkyrie')
