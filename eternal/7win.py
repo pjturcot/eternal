@@ -295,4 +295,8 @@ if __name__ == '__main__':
 
 
     display_cards_in_contention('open', 'protector')
-    display_cards_in_contention('commando', 'valkyrie')
+
+
+    output_order = ['Faction', 'Count', 'PossibleDecks', 'CountPerDeck', 'SetNumber', 'EternalID', 'OfferRate', 'CountPerOffer', 'CountPerOfferDeck', 'Rarity',
+                    'Type', 'Name', 'CardText', 'Cost', 'Influence', 'Attack', 'Health', 'ImageUrl', 'DetailsUrl', 'DeckBuildable', 'UnitType', 'MarketAccess']
+    card_counts[output_order].to_csv('card_counts.csv')
