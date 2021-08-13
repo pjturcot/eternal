@@ -7,6 +7,8 @@ import eternal.card
 import eternal.ewc
 import eternal.plot
 
+CARDS_DATA = eternal.card.ALL.data
+
 if __name__ == '__main__':
     # The structure of this CSV is FarmingEternal's 7-win run breakdown (Google Sheet) exported as CSV
     df_7win_decks = pd.read_csv('7win_decks_set11.csv')[['TS', 'Factions', 'Contributor', 'Image', 'EWC', 'EWC-P', 'W',
@@ -45,7 +47,7 @@ if __name__ == '__main__':
     card_counts = all_cards.groupby('Name')['Faction'].apply(lambda x: pd.Series({'Faction': x[0], 'Count': x.size})).unstack(1)
     card_counts['PossibleDecks'] = card_counts['Faction'].map(playable_deck_count_by_faction)
     card_counts['CountPerDeck'] = card_counts['Count'] / card_counts['PossibleDecks']
-    card_counts = card_counts.merge(eternal.card.ALL.data, left_index=True, right_on='Name', how='left')
+    card_counts = card_counts.merge(CARDS_DATA, left_index=True, right_on='Name', how='left')
     card_counts['MarketAccess'] = card_counts.index.map(dict(([(x.id, x.has_market_access()) for x in eternal.card.ALL.cards])))
 
     # Frequency normalized (pick, boosting, faction, rarity)
@@ -58,10 +60,10 @@ if __name__ == '__main__':
     freq_faction = card_counts['Faction'].map(freq_faction_lookup)
 
     # Determine base offer rates by card
-    set11_rarity_counts = eternal.card.ALL.data[eternal.card.ALL.data['SetNumber'] == 11]['Rarity'].value_counts()
+    set11_rarity_counts = CARDS_DATA[CARDS_DATA['SetNumber'] == 11]['Rarity'].value_counts()
     set11_rarity_counts.drop('Promo', inplace=True, errors='ignore')
 
-    draft_pack_cards = eternal.card.ALL.data.loc[draft_pack_boosting.keys()].copy()
+    draft_pack_cards = CARDS_DATA.loc[draft_pack_boosting.keys()].copy()
     draft_pack_cards['Boosting'] = draft_pack_cards.index.map(draft_pack_boosting)
     draft_pack_rarity_counts = draft_pack_cards.groupby('Rarity')['Boosting'].sum()
     draft_pack_rarity_counts.drop('Promo', inplace=True, errors='ignore')
@@ -281,6 +283,25 @@ if __name__ == '__main__':
     plt.grid('on')
     plt.ylabel('Percentage of decks')
 
+
+    # Analyze decks using Sketches or Rune
+    cards_sketches = CARDS_DATA[CARDS_DATA['Name'].str.endswith('Sketch')]
+    cards_runes = CARDS_DATA[CARDS_DATA['Name'].str.startswith('Rune of')]
+    cards_both = pd.concat([cards_runes, cards_sketches])
+
+    power_sink_summary = []
+    for id, sketch in cards_both.iterrows():
+        n_decks = all_cards[all_cards.index.isin([id])].DeckId.unique().size
+        power_sink_summary.append([sketch.Name, n_decks])
+
+    power_sink_summary.append(['Any Rune', all_cards[all_cards.index.isin(cards_runes.index)].DeckId.unique().size])
+    power_sink_summary.append(['Any Sketch', all_cards[all_cards.index.isin(cards_sketches.index)].DeckId.unique().size])
+    power_sink_summary.append(['Any Rune or Sketch', all_cards[all_cards.index.isin(cards_both.index)].DeckId.unique().size])
+
+    df_power_sink_summary = pd.DataFrame(power_sink_summary, columns=['Scenario', 'NumDecks'])
+    df_power_sink_summary['PercentageDecks'] = df_power_sink_summary['NumDecks'] / len(df_7win_decks) * 100.0
+    print("**** Percentage of decks containing power sinks (Sketches and/or Runes)****")
+    print(df_power_sink_summary)
 
     def display_cards_in_contention(*args,
                                     stats=['Name', 'PossibleDecks', 'OfferRate', 'Count', 'CountPerDeck', 'CountPerOffer', 'CountPerOfferDeck']):
