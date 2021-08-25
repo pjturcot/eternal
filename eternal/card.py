@@ -1,8 +1,8 @@
 import json
+import logging
 import os
-import re
-
 import pandas as pd
+import re
 
 FACTIONS = set('FJTPS')
 
@@ -251,3 +251,16 @@ ALL_CARDS_JSON_PATH = os.path.join(os.path.dirname(__file__), 'eternal-cards.jso
 if os.path.exists(ALL_CARDS_JSON_PATH):
     ALL = CardCollection()
     ALL.load(ALL_CARDS_JSON_PATH)
+else:
+    logging.warning(
+        """"
+        *****************************************
+        Unable to locate eternal-cards.json!
+        
+        This file is needed in order to get card states and can be downloaded at:
+        https://eternalwarcry.com/cards/download
+        
+        And saved to the following path:
+        {dir}        
+        *****************************************
+        """.format(dir=os.path.dirname(__file__)))
