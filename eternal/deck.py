@@ -1,7 +1,6 @@
 import pandas as pd
 
-from card import FACTIONS
-
+from .card import FACTIONS
 
 class Deck:
     """Object representing a deck of cards in Eternal.
