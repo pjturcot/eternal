@@ -1,15 +1,18 @@
+import json
+import re
+
+import matplotlib.pyplot as plt
+import pandas as pd
+
 import eternal.card
 import eternal.ewc
 import eternal.plot
-import matplotlib.pyplot as plt
-import pandas as pd
-import re
 
 CARDS_DATA = eternal.card.ALL.data
 
 if __name__ == '__main__':
     # The structure of this CSV is FarmingEternal's 7-win run breakdown (Google Sheet) exported as CSV
-    df_7win_decks = pd.read_csv('7win_decks_set11.csv')[['TS', 'Factions', 'Contributor', 'Image', 'EWC', 'EWC-P', 'W',
+    df_7win_decks = pd.read_csv('7win_decks_set12.csv')[['s', 'Factions', 'Contributor', 'Image', 'EWC', 'EWC-P', 'W',
                                                          'L', 'Ep. #']]
 
     df_7win_decks['Deck'] = None
@@ -49,7 +52,10 @@ if __name__ == '__main__':
     card_counts['MarketAccess'] = card_counts.index.map(dict(([(x.id, x.has_market_access()) for x in eternal.card.ALL.cards])))
 
     # Frequency normalized (pick, boosting, faction, rarity)
-    draft_pack_boosting = eternal.ewc.scrape_draft_pack_boosted_rates()
+    CURRENT_SET = 12
+    DRAFT_FORMAT = '12.1'
+    with open(f'boosting_data/{DRAFT_FORMAT}.json') as fin:
+        DRAFT_PACK_BOOSTING = json.load(fin)['boosting']
 
     freq_faction_lookup = {}
     for faction in card_counts['Faction'].unique():
@@ -58,20 +64,20 @@ if __name__ == '__main__':
     freq_faction = card_counts['Faction'].map(freq_faction_lookup)
 
     # Determine base offer rates by card
-    set11_rarity_counts = CARDS_DATA[CARDS_DATA['SetNumber'] == 11]['Rarity'].value_counts()
-    set11_rarity_counts.drop('Promo', inplace=True, errors='ignore')
+    currentset_rarity_counts = CARDS_DATA[CARDS_DATA['SetNumber'] == CURRENT_SET]['Rarity'].value_counts()
+    currentset_rarity_counts.drop('Promo', inplace=True, errors='ignore')
 
-    draft_pack_cards = CARDS_DATA.loc[draft_pack_boosting.keys()].copy()
-    draft_pack_cards['Boosting'] = draft_pack_cards.index.map(draft_pack_boosting)
+    draft_pack_cards = CARDS_DATA.loc[DRAFT_PACK_BOOSTING.keys()].copy()
+    draft_pack_cards['Boosting'] = draft_pack_cards.index.map(DRAFT_PACK_BOOSTING)
     draft_pack_rarity_counts = draft_pack_cards.groupby('Rarity')['Boosting'].sum()
     draft_pack_rarity_counts.drop('Promo', inplace=True, errors='ignore')
     draft_pack_cards['BoostedFreq'] = draft_pack_cards['Boosting'] / draft_pack_cards['Rarity'].map(draft_pack_rarity_counts)
 
-    set11_index = card_counts['SetNumber'] == 11
-    draft_pack_index = ~set11_index & ~(card_counts['Name'].str.endswith('Sigil'))
+    currentset_index = card_counts['SetNumber'] == CURRENT_SET
+    draft_pack_index = ~currentset_index & ~(card_counts['Name'].str.endswith('Sigil'))
     freq_rarity_per_pack = card_counts['Rarity'].map({'Common': 8.0, 'Uncommon': 3.0, 'Rare': 0.905, 'Legendary': 0.095})
     base_offer_rate = pd.Series(index=card_counts.index, dtype='float64')
-    base_offer_rate[set11_index] = 1.0 / (card_counts[set11_index])['Rarity'].map(set11_rarity_counts)
+    base_offer_rate[currentset_index] = 1.0 / (card_counts[currentset_index])['Rarity'].map(currentset_rarity_counts)
     base_offer_rate[draft_pack_index] = draft_pack_cards['BoostedFreq'].loc[base_offer_rate[draft_pack_index].index]
     offer_rate = 2 * freq_rarity_per_pack * base_offer_rate  # 2 packs for each pool
 
@@ -163,9 +169,12 @@ if __name__ == '__main__':
     out_of_faction_cards = pd.DataFrame(
         [x for i, x in all_cards.iterrows() if (not set(x.Faction).issubset(x.DeckMainFaction + x.DeckSplashFaction)) and (x.Faction is not 'None')])
     print("Out of faction most played cards")
-    print(out_of_faction_cards['Name'].value_counts())
-    print("Out of faction card Contributors")
-    print(df_7win_decks.loc[out_of_faction_cards['DeckId']]['Contributor'].value_counts())
+    if not out_of_faction_cards.empty:
+        print(out_of_faction_cards['Name'].value_counts())
+        print("Out of faction card Contributors")
+        print(df_7win_decks.loc[out_of_faction_cards['DeckId']]['Contributor'].value_counts())
+    else:
+        print("No out of faction cards played!!!")
 
     # ********** UNIT ANALYSIS **************
     # Look at the unit-counts by player
@@ -258,87 +267,104 @@ if __name__ == '__main__':
     sorted_units_faction_by_health.plot(kind='bar', stacked=True, grid=True, color=colors, legend=True)
 
     # Plot the unit-health by faction
-    plt.figure()
-    for i, COST in enumerate([3, 5]):
-        ax = plt.subplot(2, 1, i + 1)
-        stealth_units = all_cards[(all_cards.Type == 'Unit') & (all_cards.CardText.str.contains('<b>Stealth</b>')) & (all_cards.Cost == COST)].copy()
-        stealth_units['Faction'] = stealth_units.Influence.apply(eternal.card.influence_to_faction)
-        stealth_units_health_by_faction = stealth_units.pivot_table(index='Faction', columns=['Health'], values='Name', aggfunc='count')
-        sorted_stealth_units_faction_by_health = stealth_units_health_by_faction.loc[
-            stealth_units_health_by_faction.sum(axis=1).sort_values(ascending=False).index].transpose()
-        colors = eternal.plot.get_faction_colors(sorted_stealth_units_faction_by_health.columns)
-        sorted_stealth_units_faction_by_health.plot(kind='bar', stacked=True, grid=True, color=colors, legend=True, ax=ax)
-        plt.ylabel('Count of units')
-        plt.title('Health of {COST}-cost *Stealth* units'.format(COST=COST))
+    def plot_unit_health_by_faction():
+        plt.figure()
+        for i, COST in enumerate([3, 5]):
+            ax = plt.subplot(2, 1, i + 1)
+            stealth_units = all_cards[(all_cards.Type == 'Unit') & (all_cards.CardText.str.contains('<b>Stealth</b>')) & (all_cards.Cost == COST)].copy()
+            stealth_units['Faction'] = stealth_units.Influence.apply(eternal.card.influence_to_faction)
+            stealth_units_health_by_faction = stealth_units.pivot_table(index='Faction', columns=['Health'], values='Name', aggfunc='count')
+            sorted_stealth_units_faction_by_health = stealth_units_health_by_faction.loc[
+                stealth_units_health_by_faction.sum(axis=1).sort_values(ascending=False).index].transpose()
+            colors = eternal.plot.get_faction_colors(sorted_stealth_units_faction_by_health.columns)
+            sorted_stealth_units_faction_by_health.plot(kind='bar', stacked=True, grid=True, color=colors, legend=True, ax=ax)
+            plt.ylabel('Count of units')
+            plt.title('Health of {COST}-cost *Stealth* units'.format(COST=COST))
 
-    # Plot the faction popularity over time
-    N_DECK_WINDOW = 100
-    plt.figure()
-    for faction in eternal.card.FACTIONS:
-        color = eternal.plot.get_faction_colors(faction)
-        plt.plot(df_7win_decks['MainFaction'].str.contains(faction).rolling(N_DECK_WINDOW).mean() * 100.0, color=color[0], label=faction)
-    plt.legend()
-    plt.title('Rolling {N}-deck average of Main Faction popularity'.format(N=N_DECK_WINDOW))
-    plt.grid('on')
-    plt.ylabel('Percentage of decks')
+
+    # Plot the main popularity over time
+    def plot_faction_popularity(faction_type='MainFaction', n_deck_window=100):
+        """
+
+        Args:
+            faction_type:    'MainFaction', 'SplashFaction', or 'MainFaction + SplashFaction'
+        :return:
+        """
+        plt.figure()
+        if faction_type == 'MainFaction':
+            deck_factions = df_7win_decks['MainFaction'].str
+        elif faction_type == 'SplashFaction':
+            deck_factions = df_7win_decks['SplashFaction'].str
+        elif faction_type == 'MainFaction + SplashFaction':
+            deck_factions = (df_7win_decks['SplashFaction'] + df_7win_decks['SplashFaction']).str
+        for faction in eternal.card.FACTIONS:
+            color = eternal.plot.get_faction_colors(faction)
+            plt.plot(deck_factions.contains(faction).rolling(n_deck_window).mean() * 100.0, color=color[0], label=faction)
+        average_n_factions = deck_factions.len().mean()
+        plt.legend()
+        plt.title(f'Rolling {n_deck_window}-deck average of {faction_type} popularity')
+        plt.grid('on')
+        plt.ylabel('Percentage of decks')
+        xlim = plt.xlim()
+        plt.plot(plt.xlim(), [average_n_factions / 5.0 * 100] * 2, '--', color=(0.5, 0.5, 0.5))
+        plt.xlim(xlim)
+        plt.ylim(0.0, plt.ylim()[1])
+
 
     # Plot the faction popularity over time (multi-faction)
+    def plot_multifaction_popularity():
+        MIN_DECK = 10
+        N_DECK_WINDOW = 100
+        deck_count_by_faction = df_7win_decks['MainFaction'].value_counts()
+        deck_popularity_by_faction = pd.DataFrame()
+        for faction, count in deck_count_by_faction.items():
+            if count >= MIN_DECK:
+                deck_popularity_by_faction[faction] = (df_7win_decks['MainFaction'] == faction).rolling(N_DECK_WINDOW).mean() * 100.0
 
-    MIN_DECK = 10
-    N_DECK_WINDOW = 100
-    deck_count_by_faction = df_7win_decks['MainFaction'].value_counts()
-    deck_popularity_by_faction = pd.DataFrame()
-    for faction, count in deck_count_by_faction.items():
-        if count >= MIN_DECK:
-            deck_popularity_by_faction[faction] = (df_7win_decks['MainFaction'] == faction).rolling(N_DECK_WINDOW).mean() * 100.0
+        plt.figure()
+        faction_order = deck_popularity_by_faction.iloc[-1].sort_values(ascending=False).index
+        ax = plt.subplot(2, 1, 1)
+        df_popularity = deck_popularity_by_faction[faction_order[:5]]
+        first_color = eternal.plot.get_faction_colors([x[0] for x in df_popularity.columns])
+        second_color = eternal.plot.get_faction_colors([x[1] for x in df_popularity.columns])
+        df_popularity.plot(grid='on', color=first_color, linewidth=6, alpha=0.5, ax=ax)
+        df_popularity.plot(grid='on', color=second_color, linewidth=1, ax=ax)
+        plt.ylabel('Percentage of decks')
+        plt.title('Deck popularity (top 1-5 popular factions today)')
+        ax.get_legend().remove()
+        ylim = plt.ylim()
 
-    plt.figure()
-    faction_order = deck_popularity_by_faction.iloc[-1].sort_values(ascending=False).index
-    ax = plt.subplot(2, 1, 1)
-    df_popularity = deck_popularity_by_faction[faction_order[:5]]
-    first_color = eternal.plot.get_faction_colors([x[0] for x in df_popularity.columns])
-    second_color = eternal.plot.get_faction_colors([x[1] for x in df_popularity.columns])
-    df_popularity.plot(grid='on', color=first_color, linewidth=6, alpha=0.5, ax=ax)
-    df_popularity.plot(grid='on', color=second_color, linewidth=1, ax=ax)
-    plt.ylabel('Percentage of decks')
-    plt.title('Deck popularity (top 1-5 popular factions today)')
-    ax.get_legend().remove()
-    ylim = plt.ylim()
+        ax = plt.subplot(2, 1, 2)
+        df_popularity = deck_popularity_by_faction[faction_order[5:]]
+        first_color = eternal.plot.get_faction_colors([x[0] for x in df_popularity.columns])
+        second_color = eternal.plot.get_faction_colors([x[1] for x in df_popularity.columns])
+        df_popularity.plot(grid='on', color=first_color, linewidth=6, alpha=0.5, ax=ax)
+        df_popularity.plot(grid='on', color=second_color, linewidth=1, ax=ax)
+        plt.ylabel('Percentage of decks')
+        plt.title('Deck popularity (top 6-10 popular factions today)')
+        ax.get_legend().remove()
+        plt.ylim(ylim)
 
-    plt.plot([419, 419], ylim, 'm--', linewidth=2, alpha=0.5)
-    plt.plot([419 + N_DECK_WINDOW, 419 + N_DECK_WINDOW], ylim, 'm--', linewidth=2, alpha=0.5)
 
-    ax = plt.subplot(2, 1, 2)
-    df_popularity = deck_popularity_by_faction[faction_order[5:]]
-    first_color = eternal.plot.get_faction_colors([x[0] for x in df_popularity.columns])
-    second_color = eternal.plot.get_faction_colors([x[1] for x in df_popularity.columns])
-    df_popularity.plot(grid='on', color=first_color, linewidth=6, alpha=0.5, ax=ax)
-    df_popularity.plot(grid='on', color=second_color, linewidth=1, ax=ax)
-    plt.ylabel('Percentage of decks')
-    plt.title('Deck popularity (top 6-10 popular factions today)')
-    ax.get_legend().remove()
-    plt.ylim(ylim)
-    plt.plot([419, 419], ylim, 'm--', linewidth=2, alpha=0.5)
-    plt.plot([419 + N_DECK_WINDOW, 419 + N_DECK_WINDOW], ylim, 'm--', linewidth=2, alpha=0.5)
+    def power_sink_summary():
+        """"Analyze decks using Sketches or Rune"""
+        cards_sketches = CARDS_DATA[CARDS_DATA['Name'].str.endswith('Sketch')]
+        cards_runes = CARDS_DATA[CARDS_DATA['Name'].str.startswith('Rune of')]
+        cards_both = pd.concat([cards_runes, cards_sketches])
 
-    # Analyze decks using Sketches or Rune
-    cards_sketches = CARDS_DATA[CARDS_DATA['Name'].str.endswith('Sketch')]
-    cards_runes = CARDS_DATA[CARDS_DATA['Name'].str.startswith('Rune of')]
-    cards_both = pd.concat([cards_runes, cards_sketches])
+        power_sink_summary = []
+        for id, sketch in cards_both.iterrows():
+            n_decks = all_cards[all_cards.index.isin([id])].DeckId.unique().size
+            power_sink_summary.append([sketch.Name, n_decks])
 
-    power_sink_summary = []
-    for id, sketch in cards_both.iterrows():
-        n_decks = all_cards[all_cards.index.isin([id])].DeckId.unique().size
-        power_sink_summary.append([sketch.Name, n_decks])
+        power_sink_summary.append(['Any Rune', all_cards[all_cards.index.isin(cards_runes.index)].DeckId.unique().size])
+        power_sink_summary.append(['Any Sketch', all_cards[all_cards.index.isin(cards_sketches.index)].DeckId.unique().size])
+        power_sink_summary.append(['Any Rune or Sketch', all_cards[all_cards.index.isin(cards_both.index)].DeckId.unique().size])
 
-    power_sink_summary.append(['Any Rune', all_cards[all_cards.index.isin(cards_runes.index)].DeckId.unique().size])
-    power_sink_summary.append(['Any Sketch', all_cards[all_cards.index.isin(cards_sketches.index)].DeckId.unique().size])
-    power_sink_summary.append(['Any Rune or Sketch', all_cards[all_cards.index.isin(cards_both.index)].DeckId.unique().size])
-
-    df_power_sink_summary = pd.DataFrame(power_sink_summary, columns=['Scenario', 'NumDecks'])
-    df_power_sink_summary['PercentageDecks'] = df_power_sink_summary['NumDecks'] / len(df_7win_decks) * 100.0
-    print("**** Percentage of decks containing power sinks (Sketches and/or Runes)****")
-    print(df_power_sink_summary)
+        df_power_sink_summary = pd.DataFrame(power_sink_summary, columns=['Scenario', 'NumDecks'])
+        df_power_sink_summary['PercentageDecks'] = df_power_sink_summary['NumDecks'] / len(df_7win_decks) * 100.0
+        print("**** Percentage of decks containing power sinks (Sketches and/or Runes)****")
+        print(df_power_sink_summary)
 
 
     def display_cards_in_contention(*args,
@@ -355,6 +381,12 @@ if __name__ == '__main__':
 
     display_cards_in_contention('open', 'protector')
 
+    # Dump outputs
     output_order = ['Faction', 'Count', 'PossibleDecks', 'CountPerDeck', 'SetNumber', 'EternalID', 'OfferRate', 'CountPerOffer', 'CountPerOfferDeck', 'Rarity',
                     'Type', 'Name', 'CardText', 'Cost', 'Influence', 'Attack', 'Health', 'ImageUrl', 'DetailsUrl', 'DeckBuildable', 'UnitType', 'MarketAccess']
     card_counts[output_order].to_csv('card_counts.csv')
+
+    # Additional analysis
+    #plot_unit_health_by_faction()
+    plot_faction_popularity('MainFaction', 100)
+    plot_faction_popularity('SplashFaction', 100)

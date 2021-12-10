@@ -39,8 +39,8 @@ class Deck:
         """Determine the faction of the deck based on main/market cards.
 
         Logic for determining deck faction:
-         - 10 non-power cards shows a full pip (main color) in-game (when building a deck)
-         - 1-9 non-power cards show a full pip (splash color) in-game (when building a deck)
+         - 10 non-power cards shows a opaque pip (main color) in-game (when building a deck)
+         - 1-9 non-power cards show a transparent pip (splash color) in-game (when building a deck)
 
         With 5 factions in a 75-card constructed deck (with 1/3 power requirement):
         main factions are ones with >= 1/5th (5 factions total) of the non-power deck requirement

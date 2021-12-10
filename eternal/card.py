@@ -1,8 +1,9 @@
 import json
 import logging
 import os
-import pandas as pd
 import re
+
+import pandas as pd
 
 FACTIONS = set('FJTPS')
 
@@ -136,6 +137,8 @@ class CardInfo:
             return 1
 
         card_text = self.data['CardText']
+        if '<b>Inscribe</b>' in card_text:
+            return 1
         re_draw_sigil = re.compile("(?i)draw a .*sigil")
         matches = re_draw_sigil.findall(card_text)
         if matches and self.data['Cost'] <= 2:
