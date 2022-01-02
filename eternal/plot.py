@@ -11,7 +11,7 @@ def get_faction_colors(faction_list):
     Returns: color_list - List of colors to use for plotting
     """
     # TODO: Find a better color mapping for OTHER colors / common faction pairs
-    FACTION_COLORS_LOOKUP = {'F': 'red', 'J': 'green', 'T': 'yellow', 'S': 'purple', 'P': 'blue', 'None': 'grey'}
+    FACTION_COLORS_LOOKUP = {'F': 'red', 'J': 'green', 'T': 'orange', 'S': 'purple', 'P': 'blue', 'None': 'grey'}
     OTHER_COLORS = ['magenta', 'black', 'cyan']
     colors = []
     cycler = iter(itertools.cycle(OTHER_COLORS))

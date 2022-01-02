@@ -3,12 +3,22 @@ import re
 
 import matplotlib.pyplot as plt
 import pandas as pd
+import scipy.stats
 
 import eternal.card
 import eternal.ewc
 import eternal.plot
 
 CARDS_DATA = eternal.card.ALL.data
+
+
+def imode(src):
+    """Return a copy of a series where all case-insensitive versions have been replaced with the most common case sensitive variant."""
+    dest = src.copy()
+    for lower, subset in src.groupby(src.str.lower()):
+        dest[subset.index] = subset.mode().values[0]
+    return dest
+
 
 if __name__ == '__main__':
     # The structure of this CSV is FarmingEternal's 7-win run breakdown (Google Sheet) exported as CSV
@@ -23,6 +33,7 @@ if __name__ == '__main__':
         deck.main_data['PowerCount'] = [card.power_count() for card in deck.main_cards]
         deck.main_data['MarketAccess'] = [card.has_market_access() for card in deck.main_cards]
         df_7win_decks.at[id, 'Deck'] = deck
+    df_7win_decks['Contributor'] = imode(df_7win_decks['Contributor'])
     df_7win_decks['MainFaction'] = df_7win_decks.Deck.apply(lambda x: ''.join(x.faction()[0]))
     df_7win_decks['SplashFaction'] = df_7win_decks.Deck.apply(lambda x: ''.join(x.faction()[1]))
 
@@ -31,6 +42,9 @@ if __name__ == '__main__':
     all_cards['DeckSplashFaction'] = all_cards.DeckId.map(df_7win_decks['SplashFaction'])
     all_cards['IsSplash'] = all_cards.apply(lambda x: bool(set(x['DeckSplashFaction']).intersection(x['Influence'])), axis=1)
     all_cards['Faction'] = all_cards['Influence'].apply(eternal.card.influence_to_faction)
+    all_cards['Contributor'] = all_cards.DeckId.map(df_7win_decks['Contributor'])
+    for faction in 'FTJPS':
+        all_cards[faction] = all_cards['Faction'].str.contains(faction)
 
     # Playable deck counts
     card_factions = set(map(eternal.card.influence_to_faction, all_cards[all_cards['Type'] != 'Power']['Influence'].unique()))
@@ -83,7 +97,7 @@ if __name__ == '__main__':
 
     card_counts['OfferRate'] = offer_rate
     card_counts['CountPerOffer'] = card_counts['Count'] / (card_counts['OfferRate'])
-    card_counts['CountPerOfferDeck'] = card_counts['Count'] / (card_counts['OfferRate'] * card_counts['PossibleDecks'])
+    card_counts['CountPerOfferDeck'] = (card_counts['Count'] / (card_counts['OfferRate'] * card_counts['PossibleDecks'])).astype('float')
 
     # Analyze the top commons
     CARD_COUNT_DISPLAY_COLS = ['Name', 'Rarity', 'Faction', 'PossibleDecks', 'OfferRate', 'Count', 'CountPerDeck', 'CountPerOffer', 'CountPerOfferDeck']
@@ -193,8 +207,8 @@ if __name__ == '__main__':
     # Contributor Deck Power (Type==Power)
     df_7win_decks['NumPower'] = df_7win_decks.Deck.apply(lambda x: x.types())['Power']
     power_by_player = df_7win_decks.groupby('Contributor')['NumPower'].describe()[['count', 'mean', 'min', 'max']]
-    # print("**** Power played by player (card type = Power) *****")
-    # print(power_by_player[power_by_player['count'] >= 3].sort_values('mean')[['count', 'mean', 'min', 'max']])
+    print("**** Power played by player (card type = Power) *****")
+    print(power_by_player[power_by_player['count'] >= 3].sort_values('mean')[['count', 'mean', 'min', 'max']])
 
     # Contributor Deck Power (Effective Power)
     df_7win_decks['EffectivePower'] = df_7win_decks.index.map(all_cards.groupby('DeckId')['PowerCount'].sum())
@@ -206,13 +220,24 @@ if __name__ == '__main__':
     # Contributor Deck Power (Type==Power vs. Effective Power)
     power_by_player_merged = pd.merge(power_by_player, powercount_by_player, left_index=True, right_index=True,
                                       suffixes=('_type', '_effective'))
-    # print( power_by_player_merged[power_by_player_merged['count_type'] >= 3].sort_values('mean_effective'))
+    print(power_by_player_merged[power_by_player_merged['count_type'] >= 3].sort_values('mean_effective'))
 
     # MainFaction Deck Power (Type==Power vs. Effective Power)
     powercount_by_deck_main_faction = df_7win_decks.groupby('MainFaction')['EffectivePower'].describe()[['count', 'mean', 'min', 'max']]
     print("**** Power played by deck main factions (effective power*) *****")
     print("NOTE: <=2 cost or less spells counted as power e.g. Seek Power/Etchings/BluePrints etc.")
     print(powercount_by_deck_main_faction[powercount_by_deck_main_faction['count'] >= 3].sort_values('mean'))
+
+    # Contrbutor power vs. Effective power
+    power_by_player_subset = power_by_player_merged[power_by_player_merged['count_type'] >= 3]
+    plt.figure()
+    plt.scatter(power_by_player_subset['mean_type'].values, power_by_player_subset['mean_effective'].values, label=power_by_player_subset.index)
+    for name in power_by_player_subset.index:
+        plt.annotate(name, (power_by_player_subset.loc[name]['mean_type'], power_by_player_subset.loc[name]['mean_effective']))
+    plt.grid('on')
+    plt.xlabel('Power (type) cards')
+    plt.ylabel('Effective power')
+    plt.show()
 
     # Plot amount of power
     MIN_DECK = 10
@@ -265,6 +290,56 @@ if __name__ == '__main__':
     sorted_units_faction_by_health = units_health_by_faction.loc[units_health_by_faction.sum(axis=1).sort_values(ascending=False).index].transpose()
     colors = eternal.plot.get_faction_colors(sorted_units_faction_by_health.columns)
     sorted_units_faction_by_health.plot(kind='bar', stacked=True, grid=True, color=colors, legend=True)
+
+    ##******** BEST AND WORST DECKS **************
+    all_cards['CountPerOffer'] = all_cards.index.map(card_counts['CountPerOffer'])
+    all_cards['CountPerOfferDeck'] = all_cards.index.map(card_counts['CountPerOfferDeck'])
+
+    best_decks = df_7win_decks.loc[all_cards.groupby('DeckId')['CountPerOfferDeck'].mean().nlargest(10).index]
+    worst_decks = df_7win_decks.loc[all_cards.groupby('DeckId')['CountPerOfferDeck'].mean().nsmallest(10).index]
+
+
+    def plot_contributor_faction_usage():
+        contributor_faction_counts = all_cards[all_cards.Type != 'Power'].groupby('Contributor')[['F', 'T', 'J', 'P', 'S']].sum()
+        contributor_faction_percent = contributor_faction_counts.div(contributor_faction_counts.sum(axis=1), axis=0)
+        contributor_faction_percent['count'] = contributor_faction_percent.index.map(df_7win_decks['Contributor'].value_counts())
+        contributor_faction_percent['deviation'] = (contributor_faction_percent[['F', 'T', 'J', 'P', 'S']] - 0.2).abs().sum(axis=1)
+        divergence = lambda x: scipy.stats.entropy(x.values, [0.2, 0.2, 0.2, 0.2, 0.2])
+        contributor_faction_percent['divergence'] = contributor_faction_percent[['F', 'T', 'J', 'P', 'S']].apply(divergence, axis=1)
+        contributor_faction_percent['top_faction_percent'] = (contributor_faction_percent[['F', 'T', 'J', 'P', 'S']]).max(axis=1)
+        contributor_faction_percent['top_faction'] = (contributor_faction_percent[['F', 'T', 'J', 'P', 'S']]).idxmax(axis=1)
+
+        subset = contributor_faction_percent[contributor_faction_percent['count'] >= 7]
+        plt.figure()
+        plt.plot(subset['divergence'], subset['top_faction_percent'], 'ob')
+        for name, data in subset.iterrows():
+            top_faction = data['top_faction']
+            color = eternal.plot.get_faction_colors(top_faction)
+            plt.annotate(f'{name} ({top_faction})', (data['divergence'], data['top_faction_percent']), color=color[0])
+        plt.grid('on')
+        plt.xlabel('Divergence (0 = generalize, 1.0 = specialist)')
+        plt.ylabel('Maximum faction (%)')
+        plt.title('Generalist vs. specialist')
+
+
+    def plot_inscribe_faction_usage(FACTION):
+        faction_cards = all_cards[(all_cards.Type != 'Power') & (all_cards.Influence.str.contains(FACTION))].copy()
+        faction_cards['IsInscribe'] = faction_cards.CardText.str.contains('<b>Inscribe</b>')
+        faction_cards_by_deck = faction_cards.groupby('DeckId')['IsInscribe']
+        faction_deck_stats = pd.DataFrame({'total': faction_cards_by_deck.count(), 'inscribe': faction_cards_by_deck.sum()})
+        faction_deck_stats['percent'] = faction_deck_stats['inscribe'] / faction_deck_stats['total'] * 100.0
+        plt.figure()
+        ax = plt.subplot(2, 1, 1)
+        faction_deck_stats.boxplot(column=['percent'], by=['total'], ax=ax)
+        plt.ylabel('Percent (%) Inscribe')
+        plt.xlabel(f'Number of {FACTION} cards')
+        plt.title(None)
+        ax = plt.subplot(2, 1, 2)
+        faction_deck_stats['total'].value_counts().sort_index().plot(kind='bar', ax=ax)
+        plt.grid('on')
+        plt.ylabel('Number of decks')
+        plt.xlabel(f'Number of {FACTION} cards')
+
 
     # Plot the unit-health by faction
     def plot_unit_health_by_faction():
@@ -387,6 +462,7 @@ if __name__ == '__main__':
     card_counts[output_order].to_csv('card_counts.csv')
 
     # Additional analysis
-    #plot_unit_health_by_faction()
+    # plot_unit_health_by_faction()
     plot_faction_popularity('MainFaction', 100)
     plot_faction_popularity('SplashFaction', 100)
+    plot_contributor_faction_usage()
