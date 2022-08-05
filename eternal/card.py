@@ -30,7 +30,7 @@ class CardInfo:
     # TODO: Replace with Python 3.7's dataclass
     # TODO: Figure out how to handle-factions more easily
     BASE_FIELDS = set(['Attack', 'CardText', 'Cost', 'DeckBuildable', 'DetailsUrl', 'EternalID', 'Health',
-                       'ImageUrl', 'Influence', 'Name', 'Rarity', 'SetNumber', 'Type'])
+                       'ImageUrl', 'Influence', 'Name', 'Rarity', 'SetNumber', 'Type', 'SetName'])
     UNIT_FIELDS = set(['UnitType'])
 
     def __init__(self, card_info):
@@ -70,18 +70,19 @@ class CardInfo:
     def is_valid_dict(cls, d):
         try:
             cls.validate_dict(d)
-        except AssertionError:
+        except AssertionError as e:
+            logging.debug(f'Unable to validate card JSON:\nError: {e}\nJSON:\n{d}')
             return False
         return True
 
     @classmethod
     def validate_dict(cls, d):
         fields = set(d.keys())  # Handles the case of dictionary or pandas Series
-        assert cls.BASE_FIELDS.issubset(fields)
+        assert(cls.BASE_FIELDS.issubset(fields)), 'Missing field: %s' % cls.BASE_FIELDS.difference( fields )
         extra_fields = fields.difference(cls.BASE_FIELDS)
         if extra_fields:
             if d['Type'] == 'Unit':
-                assert not extra_fields.difference(cls.UNIT_FIELDS)
+                assert(not extra_fields.difference(cls.UNIT_FIELDS)), 'Extra field(s): %s' % extra_fields
 
     def __repr__(self):
         return "<{obj_class}@{address}> {id:>8}: {name:<30} [{type}-{rarity}]".format(

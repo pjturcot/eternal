@@ -7,6 +7,7 @@ import scipy.stats
 
 import eternal.card
 import eternal.ewc
+import eternal.format
 import eternal.plot
 
 CARDS_DATA = eternal.card.ALL.data
@@ -21,9 +22,12 @@ def imode(src):
 
 
 if __name__ == '__main__':
+
+    CURRENT_SET = 12
+
     # The structure of this CSV is FarmingEternal's 7-win run breakdown (Google Sheet) exported as CSV
-    df_7win_decks = pd.read_csv('7win_decks_set12.csv')[['s', 'Factions', 'Contributor', 'Image', 'EWC', 'EWC-P', 'W',
-                                                         'L', 'Ep. #']]
+
+    df_7win_decks = pd.read_csv('7win_decks_set13.csv')[['s', 'Factions', 'Contributor', 'Image', 'EWC', 'EWC-P', 'W', 'L']]
 
     df_7win_decks['Deck'] = None
     for id, row in df_7win_decks.iterrows():
@@ -36,6 +40,10 @@ if __name__ == '__main__':
     df_7win_decks['Contributor'] = imode(df_7win_decks['Contributor'])
     df_7win_decks['MainFaction'] = df_7win_decks.Deck.apply(lambda x: ''.join(x.faction()[0]))
     df_7win_decks['SplashFaction'] = df_7win_decks.Deck.apply(lambda x: ''.join(x.faction()[1]))
+
+    # Format matcher
+#    matcher = eternal.format.DraftFormatSet(setnum=CURRENT_SET)
+#    df_7win_decks['DraftFormat'] = df_7win_decks.Deck.apply(matcher.match_deck_format_version)
 
     all_cards = pd.concat(df_7win_decks.Deck.apply(lambda x: x.main_data).tolist())
     all_cards['DeckMainFaction'] = all_cards.DeckId.map(df_7win_decks['MainFaction'])
@@ -59,48 +67,49 @@ if __name__ == '__main__':
 
     # ********** TOP CARDS (LISTS) **************
     # Figure out card count statistics
-    card_counts = all_cards.groupby('Name')['Faction'].apply(lambda x: pd.Series({'Faction': x[0], 'Count': x.size})).unstack(1)
+    card_counts = all_cards.groupby('Name')['Faction'].apply(lambda x: pd.Series({'Faction': x[0], 'Count': int(x.size)})).unstack(1)
+    card_counts['Count'] = card_counts['Count'].astype('float')
     card_counts['PossibleDecks'] = card_counts['Faction'].map(playable_deck_count_by_faction)
     card_counts['CountPerDeck'] = card_counts['Count'] / card_counts['PossibleDecks']
     card_counts = card_counts.merge(CARDS_DATA, left_index=True, right_on='Name', how='left')
     card_counts['MarketAccess'] = card_counts.index.map(dict(([(x.id, x.has_market_access()) for x in eternal.card.ALL.cards])))
 
-    # Frequency normalized (pick, boosting, faction, rarity)
-    CURRENT_SET = 12
-    DRAFT_FORMAT = '12.1'
-    with open(f'boosting_data/{DRAFT_FORMAT}.json') as fin:
-        DRAFT_PACK_BOOSTING = json.load(fin)['boosting']
-
-    freq_faction_lookup = {}
-    for faction in card_counts['Faction'].unique():
-        freq_faction_lookup[faction] = (df_7win_decks['MainFaction'] + df_7win_decks['SplashFaction']).str.contains(faction).sum() / len(df_7win_decks)
-    freq_faction_lookup['None'] = 1.0
-    freq_faction = card_counts['Faction'].map(freq_faction_lookup)
-
-    # Determine base offer rates by card
-    currentset_rarity_counts = CARDS_DATA[CARDS_DATA['SetNumber'] == CURRENT_SET]['Rarity'].value_counts()
-    currentset_rarity_counts.drop('Promo', inplace=True, errors='ignore')
-
-    draft_pack_cards = CARDS_DATA.loc[DRAFT_PACK_BOOSTING.keys()].copy()
-    draft_pack_cards['Boosting'] = draft_pack_cards.index.map(DRAFT_PACK_BOOSTING)
-    draft_pack_rarity_counts = draft_pack_cards.groupby('Rarity')['Boosting'].sum()
-    draft_pack_rarity_counts.drop('Promo', inplace=True, errors='ignore')
-    draft_pack_cards['BoostedFreq'] = draft_pack_cards['Boosting'] / draft_pack_cards['Rarity'].map(draft_pack_rarity_counts)
-
-    currentset_index = card_counts['SetNumber'] == CURRENT_SET
-    draft_pack_index = ~currentset_index & ~(card_counts['Name'].str.endswith('Sigil'))
-    freq_rarity_per_pack = card_counts['Rarity'].map({'Common': 8.0, 'Uncommon': 3.0, 'Rare': 0.905, 'Legendary': 0.095})
-    base_offer_rate = pd.Series(index=card_counts.index, dtype='float64')
-    base_offer_rate[currentset_index] = 1.0 / (card_counts[currentset_index])['Rarity'].map(currentset_rarity_counts)
-    base_offer_rate[draft_pack_index] = draft_pack_cards['BoostedFreq'].loc[base_offer_rate[draft_pack_index].index]
-    offer_rate = 2 * freq_rarity_per_pack * base_offer_rate  # 2 packs for each pool
-
-    card_counts['OfferRate'] = offer_rate
-    card_counts['CountPerOffer'] = card_counts['Count'] / (card_counts['OfferRate'])
-    card_counts['CountPerOfferDeck'] = (card_counts['Count'] / (card_counts['OfferRate'] * card_counts['PossibleDecks'])).astype('float')
+    # # Frequency normalized (pick, boosting, faction, rarity)
+    # DRAFT_FORMAT = '12.1'
+    # with open(f'boosting_data/{DRAFT_FORMAT}.json') as fin:
+    #     DRAFT_PACK_BOOSTING = json.load(fin)['boosting']
+    #
+    # freq_faction_lookup = {}
+    # for faction in card_counts['Faction'].unique():
+    #     freq_faction_lookup[faction] = (df_7win_decks['MainFaction'] + df_7win_decks['SplashFaction']).str.contains(faction).sum() / len(df_7win_decks)
+    # freq_faction_lookup['None'] = 1.0
+    # freq_faction = card_counts['Faction'].map(freq_faction_lookup)
+    #
+    # # Determine base offer rates by card (broken in Set13)
+    # currentset_rarity_counts = CARDS_DATA[CARDS_DATA['SetNumber'] == CURRENT_SET]['Rarity'].value_counts()
+    # currentset_rarity_counts.drop('Promo', inplace=True, errors='ignore')
+    #
+    # draft_pack_cards = CARDS_DATA.loc[DRAFT_PACK_BOOSTING.keys()].copy()
+    # draft_pack_cards['Boosting'] = draft_pack_cards.index.map(DRAFT_PACK_BOOSTING)
+    # draft_pack_rarity_counts = draft_pack_cards.groupby('Rarity')['Boosting'].sum()
+    # draft_pack_rarity_counts.drop('Promo', inplace=True, errors='ignore')
+    # draft_pack_cards['BoostedFreq'] = draft_pack_cards['Boosting'] / draft_pack_cards['Rarity'].map(draft_pack_rarity_counts)
+    #
+    # currentset_index = card_counts['SetNumber'] == CURRENT_SET
+    # draft_pack_index = ~currentset_index & ~(card_counts['Name'].str.endswith('Sigil'))
+    # freq_rarity_per_pack = card_counts['Rarity'].map({'Common': 8.0, 'Uncommon': 3.0, 'Rare': 0.905, 'Legendary': 0.095})
+    # base_offer_rate = pd.Series(index=card_counts.index, dtype='float64')
+    # base_offer_rate[currentset_index] = 1.0 / (card_counts[currentset_index])['Rarity'].map(currentset_rarity_counts)
+    # base_offer_rate[draft_pack_index] = draft_pack_cards['BoostedFreq'].loc[base_offer_rate[draft_pack_index].index]
+    # offer_rate = 2 * freq_rarity_per_pack * base_offer_rate  # 2 packs for each pool
+    #
+    # card_counts['OfferRate'] = offer_rate
+    # card_counts['CountPerOffer'] = card_counts['Count'] / (card_counts['OfferRate'])
+    # card_counts['CountPerOfferDeck'] = (card_counts['Count'] / (card_counts['OfferRate'] * card_counts['PossibleDecks'])).astype('float')
 
     # Analyze the top commons
-    CARD_COUNT_DISPLAY_COLS = ['Name', 'Rarity', 'Faction', 'PossibleDecks', 'OfferRate', 'Count', 'CountPerDeck', 'CountPerOffer', 'CountPerOfferDeck']
+    #CARD_COUNT_DISPLAY_COLS = ['Name', 'Rarity', 'Faction', 'PossibleDecks', 'OfferRate', 'Count', 'CountPerDeck', 'CountPerOffer', 'CountPerOfferDeck']
+    CARD_COUNT_DISPLAY_COLS = ['Name', 'Rarity', 'Faction', 'PossibleDecks', 'Count']
     N = 20
     RARITY = ['Common', 'Uncommon', 'Rare', 'Legendary']
 
@@ -121,21 +130,21 @@ if __name__ == '__main__':
     print(top_common_cards[CARD_COUNT_DISPLAY_COLS].head(N))
     print("\n")
 
-    # Analyze the top cards picked cards
-    top_picked_cards = card_counts[card_counts['Rarity'].isin(RARITY)].sort_values('CountPerOffer', ascending=False)
-    print("******Top {N} {Rarity} cards (by count per offer*)*****".format(N=N, Rarity='+'.join(RARITY)))
-    print("NOTE: OfferRates is the number of cards you would expect in a given 4-pack draft")
-    print("NOTE: CountPerOfferDeck also corrects for possible Decks so faction frequency is accounted for")
-    print(top_picked_cards[CARD_COUNT_DISPLAY_COLS].head(N))
-    print("\n")
-
-    # Analyze the least picked rare cards
-    least_picked_cards = card_counts[card_counts['Rarity'].isin(RARITY)].sort_values('CountPerOffer', ascending=True)
-    print("******Bottom {N} {Rarity} cards (by count per offer*)*****".format(N=N, Rarity='+'.join(RARITY)))
-    print("NOTE: OfferRates is the number of cards you would expect in a given 4-pack draft")
-    print("NOTE: CountPerOfferDeck also corrects for possible Decks so faction frequency is accounted for")
-    print(least_picked_cards[CARD_COUNT_DISPLAY_COLS].head(N))
-    print("\n")
+    # # Analyze the top cards picked cards
+    # top_picked_cards = card_counts[card_counts['Rarity'].isin(RARITY)].sort_values('CountPerOffer', ascending=False)
+    # print("******Top {N} {Rarity} cards (by count per offer*)*****".format(N=N, Rarity='+'.join(RARITY)))
+    # print("NOTE: OfferRates is the number of cards you would expect in a given 4-pack draft")
+    # print("NOTE: CountPerOfferDeck also corrects for possible Decks so faction frequency is accounted for")
+    # print(top_picked_cards[CARD_COUNT_DISPLAY_COLS].head(N))
+    # print("\n")
+    #
+    # # Analyze the least picked rare cards
+    # least_picked_cards = card_counts[card_counts['Rarity'].isin(RARITY)].sort_values('CountPerOffer', ascending=True)
+    # print("******Bottom {N} {Rarity} cards (by count per offer*)*****".format(N=N, Rarity='+'.join(RARITY)))
+    # print("NOTE: OfferRates is the number of cards you would expect in a given 4-pack draft")
+    # print("NOTE: CountPerOfferDeck also corrects for possible Decks so faction frequency is accounted for")
+    # print(least_picked_cards[CARD_COUNT_DISPLAY_COLS].head(N))
+    # print("\n")
 
     # Analyze the top splashed cards
     N = 20
@@ -165,18 +174,6 @@ if __name__ == '__main__':
     top_fastspell_cards = card_counts[card_counts['Type'] == 'Fast Spell'].sort_values('CountPerDeck', ascending=False)
     print("******Top {N} Fast spells  (by count per deck)*****".format(N=N))
     print(top_fastspell_cards[CARD_COUNT_DISPLAY_COLS].head(N))
-    print("\n")
-
-    # Top stealth units
-    N = 20
-    print("******Top {N} Stealth Units (by count)*****".format(N=N))
-    print(all_cards[(all_cards['Type'] == 'Unit') & (all_cards['CardText'].str.contains('<b>Stealth</b>'))]['Name'].value_counts().head(N))
-    print("\n")
-
-    top_stealth_cards = card_counts[(card_counts['Type'] == 'Unit') & (card_counts['CardText'].str.contains('<b>Stealth</b>'))].sort_values('CountPerDeck',
-                                                                                                                                            ascending=False)
-    print("******Top {N} Stealh Units  (by count per deck)*****".format(N=N))
-    print(top_stealth_cards[CARD_COUNT_DISPLAY_COLS].head(N))
     print("\n")
 
     # List out all "out of faction" cards
@@ -291,12 +288,12 @@ if __name__ == '__main__':
     colors = eternal.plot.get_faction_colors(sorted_units_faction_by_health.columns)
     sorted_units_faction_by_health.plot(kind='bar', stacked=True, grid=True, color=colors, legend=True)
 
-    ##******** BEST AND WORST DECKS **************
-    all_cards['CountPerOffer'] = all_cards.index.map(card_counts['CountPerOffer'])
-    all_cards['CountPerOfferDeck'] = all_cards.index.map(card_counts['CountPerOfferDeck'])
-
-    best_decks = df_7win_decks.loc[all_cards.groupby('DeckId')['CountPerOfferDeck'].mean().nlargest(10).index]
-    worst_decks = df_7win_decks.loc[all_cards.groupby('DeckId')['CountPerOfferDeck'].mean().nsmallest(10).index]
+    # ##******** BEST AND WORST DECKS **************
+    # all_cards['CountPerOffer'] = all_cards.index.map(card_counts['CountPerOffer'])
+    # all_cards['CountPerOfferDeck'] = all_cards.index.map(card_counts['CountPerOfferDeck'])
+    #
+    # best_decks = df_7win_decks.loc[all_cards.groupby('DeckId')['CountPerOfferDeck'].mean().nlargest(10).index]
+    # worst_decks = df_7win_decks.loc[all_cards.groupby('DeckId')['CountPerOfferDeck'].mean().nsmallest(10).index]
 
 
     def plot_contributor_faction_usage():
@@ -386,6 +383,60 @@ if __name__ == '__main__':
         plt.ylim(0.0, plt.ylim()[1])
 
 
+    # Plot the main popularity over time
+    def plot_bootstrapped_faction_popularity(faction_type='MainFaction', n_deck_window=100, bootstrap_col='Contributor'):
+        """Plot a bootstrapped version of faction popularity
+        Args:
+            faction_type:
+            n_deck_window:
+            boostrap_col:
+
+        Returns:
+
+        """
+
+        bootstrap_values = df_7win_decks[bootstrap_col]
+        N_TRIALS = 1000
+
+        faction_curves = {}
+        for faction in eternal.card.FACTIONS:
+            faction_curves[faction] = []
+
+        if faction_type == 'MainFaction':
+            deck_factions = df_7win_decks['MainFaction'].str
+        elif faction_type == 'SplashFaction':
+            deck_factions = df_7win_decks['SplashFaction'].str
+        elif faction_type == 'MainFaction + SplashFaction':
+            deck_factions = (df_7win_decks['SplashFaction'] + df_7win_decks['SplashFaction']).str
+
+        for i_trial in range(N_TRIALS):
+            # drop_out_value = np.random.choice( bootstrap_values.unique() )
+            drop_out_value = bootstrap_values.sample(1).iloc[0]
+            subset_index = (bootstrap_values != drop_out_value).values
+
+            if faction_type == 'MainFaction':
+                deck_factions = (df_7win_decks[subset_index])['MainFaction'].str
+            elif faction_type == 'SplashFaction':
+                deck_factions = df_7win_decks[subset_index]['SplashFaction'].str
+            elif faction_type == 'MainFaction + SplashFaction':
+                deck_factions = (df_7win_decks[subset_index]['SplashFaction'] + df_7win_decks[subset_index]['SplashFaction']).str
+
+            for faction in eternal.card.FACTIONS:
+                sample_curve = deck_factions.contains(faction).rolling(n_deck_window).mean() * 100.0
+                faction_curves[faction].append(sample_curve)
+
+        plt.figure()
+        average_n_factions = deck_factions.len().mean()
+        plt.legend()
+        plt.title(f'Rolling {n_deck_window}-deck average of {faction_type} popularity')
+        plt.grid('on')
+        plt.ylabel('Percentage of decks')
+        xlim = plt.xlim()
+        plt.plot(plt.xlim(), [average_n_factions / 5.0 * 100] * 2, '--', color=(0.5, 0.5, 0.5))
+        plt.xlim(xlim)
+        plt.ylim(0.0, plt.ylim()[1])
+
+
     # Plot the faction popularity over time (multi-faction)
     def plot_multifaction_popularity():
         MIN_DECK = 10
@@ -454,10 +505,12 @@ if __name__ == '__main__':
         print(card_counts[card_counts['Name'].str.contains(re_string, flags=re.IGNORECASE)][stats])
 
 
-    display_cards_in_contention('open', 'protector')
+    # display_cards_in_contention('open', 'protector')
 
     # Dump outputs
     output_order = ['Faction', 'Count', 'PossibleDecks', 'CountPerDeck', 'SetNumber', 'EternalID', 'OfferRate', 'CountPerOffer', 'CountPerOfferDeck', 'Rarity',
+                    'Type', 'Name', 'CardText', 'Cost', 'Influence', 'Attack', 'Health', 'ImageUrl', 'DetailsUrl', 'DeckBuildable', 'UnitType', 'MarketAccess']
+    output_order = ['Faction', 'Count', 'PossibleDecks', 'CountPerDeck', 'SetNumber', 'EternalID', 'Rarity',
                     'Type', 'Name', 'CardText', 'Cost', 'Influence', 'Attack', 'Health', 'ImageUrl', 'DetailsUrl', 'DeckBuildable', 'UnitType', 'MarketAccess']
     card_counts[output_order].to_csv('card_counts.csv')
 

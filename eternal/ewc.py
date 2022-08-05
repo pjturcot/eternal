@@ -48,7 +48,7 @@ def parse_v2_cards(cardstring):
 
 # Initialize the static lookup tables
 parse_v2_cards.CARD_COUNT_LOOKUP = dict([(x, i + 1) for i, x in enumerate('BCDEFGHIJKLMNOPQRSTUVWXYZ')])
-parse_v2_cards.SET_NUMBER_LOOKUP = dict([(x, i ) for i, x in enumerate('ABCDEFGHIJKLM')])
+parse_v2_cards.SET_NUMBER_LOOKUP = dict([(x, i ) for i, x in enumerate('ABCDEFGHIJKLMNOP')])  # Supported to set 15
 parse_v2_cards.ETERNAL_ID_1CHAR_LOOKUP = dict([(x, i + 1) for i, x in enumerate('BCDEFGHIJKLMNOPQRSTUVWXYZabcdef')])
 parse_v2_cards.ETERNAIL_ID_2CHAR_REPEATING = 'ghijklmnopqrstuvwxyz0123456789-_'
 
